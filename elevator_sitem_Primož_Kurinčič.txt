@@ -1,0 +1,223 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+
+namespace SmartElevatorSystem
+{
+    // možne smeri dvigala
+    enum Direction
+    {
+        Up,     // gor
+        Down,   // dol
+        Idle    // stoji
+    }
+
+    class Elevator
+    {
+        public int Id;              // številka dvigala
+        public int CurrentFloor;   // trenutno nadstropje
+        public Direction Direction; // kam se dvigalo premika
+        public int Capacity;       // koliko ljudi gre lahko noter
+
+        // seznam nadstropij kam mora dvigalo iti
+        // SortedSet jih avtomatsko uredi
+        private SortedSet<int> destinations = new SortedSet<int>();
+
+        // ko naredimo novo dvigalo
+        public Elevator(int id, int capacity)
+        {
+            Id = id;
+            Capacity = capacity;
+
+            CurrentFloor = 0;          // začne v pritličju
+            Direction = Direction.Idle; // na začetku miruje
+        }
+
+        // dodamo novo nadstropje kam mora dvigalo
+        public void AddDestination(int floor)
+        {
+            destinations.Add(floor);
+        }
+
+        // pogleda katero nadstropje je naslednje
+        private int? GetNextDestination()
+        {
+            // če ni nobenega cilja
+            if (destinations.Count == 0)
+                return null;
+
+            int? next = null;
+
+            // če gre dvigalo gor poiščemo nadstropje nad trenutnim
+            if (Direction == Direction.Up)
+            {
+                next = destinations.FirstOrDefault(f => f > CurrentFloor);
+
+                // poseben primer če je nadstropje 0
+                if (next == default(int) && destinations.Contains(0))
+                    next = 0;
+            }
+
+            // če gre dol poiščemo nadstropje pod trenutnim
+            else if (Direction == Direction.Down)
+            {
+                next = destinations.LastOrDefault(f => f < CurrentFloor);
+
+                if (next == default(int) && destinations.Contains(0))
+                    next = 0;
+            }
+
+            // če v tej smeri ni več ciljev
+            if (next == null || next == 0)
+            {
+                // probamo obrniti smer
+                if (Direction == Direction.Up && destinations.Any(f => f < CurrentFloor))
+                    Direction = Direction.Down;
+
+                else if (Direction == Direction.Down && destinations.Any(f => f > CurrentFloor))
+                    Direction = Direction.Up;
+
+                else
+                    Direction = Direction.Idle;
+
+                // vzamemo prvi cilj iz seznama
+                next = destinations.First();
+            }
+
+            return next;
+        }
+
+        // premakne dvigalo za eno nadstropje
+        public void Move()
+        {
+            var target = GetNextDestination();
+
+            // če ni ciljev dvigalo stoji
+            if (target == null)
+            {
+                Direction = Direction.Idle;
+                return;
+            }
+
+            // če mora gor
+            if (CurrentFloor < target)
+            {
+                CurrentFloor++;
+                Direction = Direction.Up;
+            }
+
+            // če mora dol
+            else if (CurrentFloor > target)
+            {
+                CurrentFloor--;
+                Direction = Direction.Down;
+            }
+
+            // če smo že na pravem nadstropju
+            else
+            {
+                Console.WriteLine($"Dvigalo {Id} ustavi na nadstropju {CurrentFloor}");
+
+                // odstranimo to nadstropje iz seznama
+                destinations.Remove(CurrentFloor);
+            }
+        }
+
+        // preveri katero dvigalo je najboljše za novo zahtevo
+        public int CalculateScore(int requestFloor, Direction requestDirection)
+        {
+            // razdalja do nadstropja
+            int distance = Math.Abs(CurrentFloor - requestFloor);
+
+            // če že gre v pravo smer je malo boljša izbira
+            if (Direction == requestDirection)
+                distance -= 2;
+
+            // če dvigalo stoji je tudi dobra izbira
+            if (Direction == Direction.Idle)
+                distance -= 1;
+
+            // da ne dobimo negativnega rezultata
+            return Math.Max(0, distance);
+        }
+    }
+
+    class ElevatorController
+    {
+        // seznam vseh dvigal
+        private List<Elevator> elevators = new List<Elevator>();
+
+        // naredimo več dvigal
+        public ElevatorController(int count)
+        {
+            for (int i = 0; i < count; i++)
+                elevators.Add(new Elevator(i + 1, 10));
+        }
+
+        // ko nekdo pokliče dvigalo
+        public void RequestElevator(int floor, Direction direction)
+        {
+            // izberemo najbolj primerno dvigalo
+            Elevator bestElevator = elevators
+                .OrderBy(e => e.CalculateScore(floor, direction))
+                .First();
+
+            Console.WriteLine($"Zahteva iz nadstropja {floor} dodeljena dvigalu {bestElevator.Id}");
+
+            // dodamo cilj temu dvigalu
+            bestElevator.AddDestination(floor);
+        }
+
+        // en korak simulacije
+        public void Step()
+        {
+            foreach (var elevator in elevators)
+            {
+                elevator.Move();
+
+                // pokažemo kje je dvigalo
+                Console.WriteLine($"Dvigalo {elevator.Id} je na {elevator.CurrentFloor} smer {elevator.Direction}");
+            }
+
+            Console.WriteLine("----------------------");
+        }
+    }
+
+    class Program
+    {
+        static void Main()
+        {
+            // random generator
+            Random rand = new Random();
+
+            int totalFloors = 10;   // koliko nadstropij ima stavba
+            int totalRequests = 10; // koliko naključnih klicev
+
+            // naredimo sistem s 3 dvigali
+            ElevatorController system = new ElevatorController(3);
+
+            // naredimo nekaj naključnih zahtev
+            for (int i = 0; i < totalRequests; i++)
+            {
+                int floor = rand.Next(0, totalFloors);
+
+                // random smer gor ali dol
+                Direction direction = (Direction)rand.Next(0, 2);
+
+                system.RequestElevator(floor, direction);
+            }
+
+            // simulacija gibanja
+            for (int i = 0; i < 30; i++)
+            {
+                system.Step();
+
+                // malo počakamo da se lepše vidi izpis
+                Thread.Sleep(500);
+            }
+
+            Console.WriteLine("Simulacija končana");
+        }
+    }
+}
