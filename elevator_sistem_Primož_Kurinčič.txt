@@ -24,13 +24,16 @@ namespace SmartElevatorSystem
         // SortedSet jih avtomatsko uredi
         private SortedSet<int> destinations = new SortedSet<int>();
 
+        // koliko ciljev ima dvigalo (uporabimo za izbiro najboljšega)
+        public int DestinationCount => destinations.Count;
+
         // ko naredimo novo dvigalo
         public Elevator(int id, int capacity)
         {
             Id = id;
             Capacity = capacity;
 
-            CurrentFloor = 0;          // začne v pritličju
+            CurrentFloor = 0;           // začne v pritličju
             Direction = Direction.Idle; // na začetku miruje
         }
 
@@ -53,19 +56,12 @@ namespace SmartElevatorSystem
             if (Direction == Direction.Up)
             {
                 next = destinations.FirstOrDefault(f => f > CurrentFloor);
-
-                // poseben primer če je nadstropje 0
-                if (next == default(int) && destinations.Contains(0))
-                    next = 0;
             }
 
             // če gre dol poiščemo nadstropje pod trenutnim
             else if (Direction == Direction.Down)
             {
                 next = destinations.LastOrDefault(f => f < CurrentFloor);
-
-                if (next == default(int) && destinations.Contains(0))
-                    next = 0;
             }
 
             // če v tej smeri ni več ciljev
@@ -160,7 +156,8 @@ namespace SmartElevatorSystem
         {
             // izberemo najbolj primerno dvigalo
             Elevator bestElevator = elevators
-                .OrderBy(e => e.CalculateScore(floor, direction))
+                .OrderBy(e => e.CalculateScore(floor, direction)) // najbližje
+                .ThenBy(e => e.DestinationCount) // najmanj nalog
                 .First();
 
             Console.WriteLine($"Zahteva iz nadstropja {floor} dodeljena dvigalu {bestElevator.Id}");
